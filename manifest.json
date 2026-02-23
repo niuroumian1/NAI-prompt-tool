@@ -1,0 +1,16 @@
+{
+  "name": "NAI 提示词工作台",
+  "short_name": "NAI工作台",
+  "description": "NovelAI 提示词管理工具",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0d0f14",
+  "theme_color": "#73daca",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

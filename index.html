@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAI 提示词工作台 - 数据迁移版</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#73daca">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon.png">
+    <style>
+        :root {
+            --bg-color: #0d0f14;
+            --card-bg: #161922;
+            --accent: #73daca;
+            --delete: #f7768e;
+            --text: #a9b1d6;
+            --input-bg: #1a1b26;
+        }
+
+        body { font-family: 'PingFang SC', sans-serif; background: var(--bg-color); color: var(--text); padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        /* 固定输出区 */
+        .sticky-header { position: sticky; top: 0; background: var(--bg-color); padding: 15px 0; z-index: 1000; border-bottom: 2px solid var(--card-bg); }
+        #display-area { 
+            width: 100%; height: 100px; background: var(--input-bg); color: #e0af68; 
+            border: 1px solid #333; border-radius: 10px; padding: 12px; 
+            font-family: monospace; font-size: 14px; margin-bottom: 12px; box-sizing: border-box;
+        }
+
+        .action-bar { display: flex; gap: 10px; margin-bottom: 10px; }
+        .search-bar { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #333; background: var(--input-bg); color: white; }
+
+        .btn { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .btn-copy { background: var(--accent); color: #000; }
+        .btn-clear { background: #3b4261; color: white; }
+        .btn-add { background: #bb9af7; color: #000; }
+        .btn-data { background: #444b6a; color: #fff; }
+
+        /* 管理面板 */
+        .admin-panel { 
+            background: var(--card-bg); padding: 15px; border-radius: 10px; 
+            margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; border: 1px dashed #444;
+        }
+        .admin-panel input, .admin-panel select { background: var(--input-bg); border: 1px solid #444; color: white; padding: 8px; border-radius: 4px; }
+
+        /* 数据迁移区 */
+        #data-zone { display: none; background: #1a1b26; padding: 15px; border-radius: 10px; margin-top: 10px; border: 1px solid var(--accent); }
+        #data-io { width: 100%; height: 80px; background: #000; color: #7aa2f7; font-family: monospace; margin-bottom: 10px; padding: 10px; box-sizing: border-box; }
+
+        /* 词库 */
+        .category-group { margin-bottom: 30px; }
+        .category-hd { font-size: 18px; color: var(--accent); margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .category-hd::after { content: ""; flex: 1; height: 1px; background: #333; }
+        
+        .tags-flex { display: flex; flex-wrap: wrap; gap: 12px; }
+        .tag-item { 
+            position: relative; background: #24283b; padding: 8px 15px; border-radius: 6px; 
+            cursor: pointer; border: 1px solid #2f334d; user-select: none; transition: 0.2s;
+        }
+        .tag-item:hover { background: #2f334d; border-color: var(--accent); transform: translateY(-2px); }
+        .tag-item .zh { font-size: 11px; display: block; opacity: 0.5; margin-top: 2px; }
+        
+        .tag-del { 
+            position: absolute; top: -8px; right: -8px; background: var(--delete); 
+            width: 18px; height: 18px; border-radius: 50%; display: none; 
+            justify-content: center; align-items: center; font-size: 10px; color: white; 
+        }
+        .tag-item:hover .tag-del { display: flex; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="sticky-header">
+        <textarea id="display-area" placeholder="点击标签生成 Prompt..."></textarea>
+        <div class="action-bar">
+            <input type="text" class="search-bar" id="search-input" placeholder="🔍 搜索 (中英文)..." oninput="render()">
+            <button class="btn btn-copy" onclick="copyResult()">一键复制</button>
+            <button class="btn btn-clear" onclick="clearResult()">清空画布</button>
+            <button class="btn btn-data" onclick="toggleDataZone()">数据备份/恢复</button>
+        </div>
+
+        <div id="data-zone">
+            <p style="margin-top:0; font-size: 12px; color: #9ece6a;">将导出的代码复制保存，下次粘贴到此处点击“导入数据”即可恢复。</p>
+            <textarea id="data-io" placeholder="在此粘贴导出的 JSON 数据..."></textarea>
+            <div style="display:flex; gap:10px;">
+                <button class="btn" style="background:#7aa2f7; color:#000;" onclick="importData()">确认导入</button>
+                <button class="btn" style="background:#e0af68; color:#000;" onclick="exportData()">导出当前词库</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="admin-panel">
+        <strong>快速添加：</strong>
+        <select id="reg-cat">
+            <option value="画风">🎨 画风</option>
+            <option value="人物">👤 人物</option>
+            <option value="动作">🏃 动作</option>
+            <option value="服装">👗 服装</option>
+            <option value="环境">🌆 环境</option>
+            <option value="道具">🎒 道具</option>
+        </select>
+        <input type="text" id="reg-en" placeholder="英文">
+        <input type="text" id="reg-zh" placeholder="中文">
+        <button class="btn btn-add" onclick="addEntry()">添加词汇</button>
+    </div>
+
+    <div id="lib-content"></div>
+</div>
+
+<script>
+    // --- PWA Service Worker 注册代码开始 ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('PWA 注册成功, 作用域为: ', reg.scope))
+                .catch(err => console.log('PWA 注册失败: ', err));
+        });
+    }
+    // --- PWA Service Worker 注册代码结束 ---
+
+    const STORAGE_KEY = 'nai_v4_db';
+    
+    // 初始化数据
+    let db = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+        "画风": [{en: "masterpiece", zh: "杰作"}],
+        "人物": [{en: "1girl", zh: "女孩"}],
+        "动作": [{en: "standing", zh: "站立"}],
+        "服装": [{en: "dress", zh: "连衣裙"}],
+        "环境": [{en: "forest", zh: "森林"}],
+        "道具": [{en: "sword", zh: "剑"}]
+    };
+
+    let resultList = [];
+
+    function render() {
+        const container = document.getElementById('lib-content');
+        const search = document.getElementById('search-input').value.toLowerCase();
+        container.innerHTML = '';
+
+        for (let cat in db) {
+            const filtered = db[cat].filter(i => i.en.toLowerCase().includes(search) || i.zh.includes(search));
+            if (filtered.length === 0 && search !== "") continue;
+
+            const group = document.createElement('div');
+            group.className = 'category-group';
+            group.innerHTML = `<div class="category-hd">${cat}</div>`;
+            
+            const flex = document.createElement('div');
+            flex.className = 'tags-flex';
+
+            filtered.forEach(item => {
+                const tag = document.createElement('div');
+                tag.className = 'tag-item';
+                tag.innerHTML = `<strong>${item.en}</strong><span class="zh">${item.zh}</span>
+                                 <div class="tag-del" onclick="deleteEntry(event, '${cat}', '${item.en}')">✕</div>`;
+                tag.onclick = () => { resultList.push(item.en); updateTextarea(); };
+                flex.appendChild(tag);
+            });
+
+            group.appendChild(flex);
+            container.appendChild(group);
+        }
+    }
+
+    function updateTextarea() { document.getElementById('display-area').value = resultList.join(', '); }
+    function clearResult() { resultList = []; updateTextarea(); }
+    function copyResult() {
+        document.getElementById('display-area').select();
+        document.execCommand('copy');
+        alert('复制成功！');
+    }
+
+    function addEntry() {
+        const cat = document.getElementById('reg-cat').value;
+        const en = document.getElementById('reg-en').value.trim();
+        const zh = document.getElementById('reg-zh').value.trim();
+        if (en && zh) {
+            db[cat].push({en, zh});
+            saveDB();
+            render();
+            document.getElementById('reg-en').value = '';
+            document.getElementById('reg-zh').value = '';
+        }
+    }
+
+    function deleteEntry(e, cat, en) {
+        e.stopPropagation();
+        if (confirm(`删除 "${en}"？`)) {
+            db[cat] = db[cat].filter(i => i.en !== en);
+            saveDB();
+            render();
+        }
+    }
+
+    function saveDB() { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); }
+
+    // --- 数据导入导出逻辑 ---
+    function toggleDataZone() {
+        const zone = document.getElementById('data-zone');
+        zone.style.display = (zone.style.display === 'block') ? 'none' : 'block';
+    }
+
+    function exportData() {
+        const dataStr = JSON.stringify(db, null, 2);
+        document.getElementById('data-io').value = dataStr;
+        document.getElementById('data-io').select();
+        alert('词库数据已生成在下方文本框中，请复制并保存到记事本。');
+    }
+
+    function importData() {
+        const input = document.getElementById('data-io').value;
+        try {
+            const parsed = JSON.parse(input);
+            if (confirm("导入新数据将覆盖当前词库，确定吗？")) {
+                db = parsed;
+                saveDB();
+                render();
+                alert("导入成功！");
+                toggleDataZone();
+            }
+        } catch (e) {
+            alert("导入失败：数据格式不正确，请确保粘贴的是完整的 JSON 代码。");
+        }
+    }
+
+    render();
+</script>
+
+</body>
+</html>
